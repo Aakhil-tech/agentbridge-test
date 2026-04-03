@@ -1,3 +1,26 @@
+from fastapi import APIRouter, HTTPException
+from database import supabase
+from core_ai.dao import DAO
+from core_ai.report_generator import generate_report
+import json
+import ast
+
+router = APIRouter()
+
+def _parse_inputs(data):
+    if not data:
+        return {}
+    if isinstance(data, dict):
+        return data
+    try:
+        # Handle stringified python dicts stored in DB
+        return ast.literal_eval(data)
+    except:
+        try:
+            return json.loads(data)
+        except:
+            return {"raw_input": str(data)}
+
 @router.get("/report")
 async def get_report(api_key: str, session_id: str = None):
     if not api_key:
@@ -6,7 +29,9 @@ async def get_report(api_key: str, session_id: str = None):
     query = supabase.table("logs").select("*").eq("api_key", api_key)
     if session_id:
         query = query.eq("session_id", session_id)
-    logs = query.order("created_at", desc=True).execute().data
+    
+    res = query.order("created_at", desc=True).execute()
+    logs = res.data
 
     if not logs:
         return {"message": "No data yet for this api_key"}
